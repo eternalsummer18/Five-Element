@@ -1,0 +1,978 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#030712">
+  <title>五行手势粒子归位</title>
+  <style>
+    * { box-sizing: border-box; }
+    :root { color-scheme: dark; }
+    html, body { margin: 0; width: 100%; height: 100%; background: #02050d; }
+    body { overflow: hidden; color: #dce8f7; font: 14px/1.6 system-ui, "Microsoft YaHei", sans-serif; }
+    button { font: inherit; }
+    main { position: relative; width: 100%; height: 100svh; min-height: 560px; overflow: hidden;
+      isolation: isolate; background:
+        radial-gradient(ellipse at 50% 48%, #102448 0%, #071329 34%, #030916 63%, #01030a 100%); }
+    main::before { content: ""; position: absolute; inset: 0; z-index: -1; pointer-events: none;
+      opacity: .26; background-image: radial-gradient(#9ecaff 0.45px, transparent .65px);
+      background-size: 37px 37px; mask-image: radial-gradient(ellipse at center, #000, transparent 76%); }
+    #stage, canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+    #stage { overflow: hidden; }
+    canvas { display: block; }
+    #overlay { z-index: 2; pointer-events: none; }
+    .topbar { position: absolute; z-index: 5; top: 0; left: 0; right: 0; padding: 24px clamp(20px, 4vw, 60px);
+      display: flex; align-items: flex-start; justify-content: space-between; pointer-events: none; }
+    .brand { transition: opacity .8s; }
+    .running .brand { opacity: .48; }
+    .eyebrow { margin: 0 0 4px; color: #607695; font-size: 9px; letter-spacing: .4em; }
+    h1 { margin: 0; color: #eaf4ff; font: 400 clamp(18px, 2vw, 25px)/1.45 "Songti SC", "SimSun", serif;
+      letter-spacing: .15em; text-shadow: 0 0 25px #6cbdff24; }
+    .progress-wrap { pointer-events: auto; display: flex; align-items: center; gap: 12px; padding-top: 8px; }
+    #progress-dots { display: flex; gap: 7px; }
+    .progress-dot { width: 7px; height: 7px; border: 1px solid #8ca6c54d; border-radius: 50%;
+      background: #07111f; box-shadow: 0 0 0 transparent; transition: .55s ease; }
+    .progress-dot.done { border-color: var(--dot); background: var(--dot); box-shadow: 0 0 12px var(--dot); }
+    #progress-text { min-width: 22px; color: #7186a0; font-size: 10px; opacity: 0; transition: opacity .25s; }
+    .progress-wrap:hover #progress-text { opacity: 1; }
+    .tools { position: absolute; z-index: 6; top: 72px; right: clamp(20px, 4vw, 60px);
+      display: flex; gap: 8px; opacity: 0; transform: translateY(-5px); pointer-events: none; transition: .5s ease; }
+    .running .tools { opacity: .7; transform: none; pointer-events: auto; }
+    .icon-button { width: 34px; height: 34px; padding: 0; border: 1px solid #8fbcf329; border-radius: 50%;
+      display: grid; place-items: center; color: #9eb2ca; background: #07132680; backdrop-filter: blur(12px); cursor: pointer; }
+    .icon-button:hover { color: #e7f4ff; border-color: #77bfff70; background: #10223c; }
+    .icon-button:focus-visible, #start:focus-visible { outline: 2px solid #77c8ff; outline-offset: 3px; }
+    .icon-button:disabled { opacity: .35; cursor: default; }
+    .icon-button svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 1.5; }
+    #music-file { display: none; }
+    .intro { position: absolute; z-index: 4; inset: 0; display: grid; place-items: center; text-align: center;
+      background: radial-gradient(circle at 50% 50%, #0c1e3c66, transparent 44%); transition: opacity .8s, visibility .8s; }
+    .intro.hidden { opacity: 0; visibility: hidden; pointer-events: none; }
+    .intro-card { width: min(520px, calc(100% - 42px)); transform: translateY(12px); }
+    .intro-mark { width: 74px; height: 74px; margin: 0 auto 26px; border: 1px solid #8ecfff55; border-radius: 50%;
+      position: relative; box-shadow: inset 0 0 35px #328dff12, 0 0 35px #328dff12; animation: breathe 4s ease-in-out infinite; }
+    .intro-mark::before, .intro-mark::after { content: ""; position: absolute; border-radius: 50%; }
+    .intro-mark::before { inset: 10px; border: 1px solid #9dd7ff2d; border-left-color: transparent; transform: rotate(-28deg); }
+    .intro-mark::after { inset: 28px; background: #c7e9ff; box-shadow: 0 0 14px #68bfff; }
+    @keyframes breathe { 50% { transform: scale(1.055); opacity: .72; } }
+    .intro h2 { margin: 0 0 10px; color: #f1f7ff; font: 400 clamp(25px, 4vw, 38px)/1.4 "Songti SC", serif;
+      letter-spacing: .17em; }
+    .intro p { margin: 0 0 28px; color: #8195af; letter-spacing: .08em; }
+    #start { min-width: 136px; min-height: 45px; border: 1px solid #72bfff70; border-radius: 99px; color: #edf8ff;
+      background: linear-gradient(135deg, #225d91cc, #15365dcc); box-shadow: inset 0 1px #ffffff24, 0 0 32px #138eff22;
+      cursor: pointer; transition: .25s; }
+    #start:hover { transform: translateY(-1px); box-shadow: inset 0 1px #ffffff2f, 0 0 42px #249eff35; }
+    #start:disabled { opacity: .55; cursor: wait; }
+    .privacy { margin-top: 14px !important; font-size: 10px; color: #536984 !important; }
+    video { position: absolute; z-index: 5; right: 22px; bottom: 70px; width: 76px; height: 76px;
+      object-fit: cover; transform: scaleX(-1); border-radius: 50%; opacity: 0; pointer-events: none;
+      filter: saturate(.5) contrast(1.1); border: 1px solid #9dcaff38; box-shadow: 0 0 0 5px #061021aa, 0 10px 30px #000a;
+      transition: opacity .8s; }
+    video.visible { opacity: .36; }
+    video[hidden] { display: none; }
+    .footer { position: absolute; z-index: 5; left: 50%; bottom: max(18px, env(safe-area-inset-bottom));
+      width: min(720px, calc(100% - 36px)); transform: translateX(-50%); text-align: center; pointer-events: none; }
+    #status { min-height: 1.6em; margin: 0; color: #cbd9ea; letter-spacing: .06em; text-shadow: 0 2px 12px #000; }
+    #audio-note { min-height: 1.4em; margin: 5px 0 0; color: #536985; font-size: 10px; transition: opacity .5s; }
+    .gesture-hint { margin: 7px 0 0; color: #70839d; font-size: 10px; letter-spacing: .12em;
+      opacity: 0; transition: opacity .8s; }
+    .running .gesture-hint { opacity: .62; }
+    .running.ready .gesture-hint { opacity: 0; }
+    @media (max-width: 600px) {
+      main { min-height: 500px; }
+      .topbar { padding: 17px 18px; }
+      h1 { font-size: 18px; letter-spacing: .08em; }
+      .eyebrow { letter-spacing: .26em; }
+      .tools { top: 62px; right: 17px; }
+      .intro-card { transform: none; }
+      .intro-mark { width: 62px; height: 62px; margin-bottom: 20px; }
+      .intro-mark::after { inset: 23px; }
+      .intro h2 { font-size: 25px; }
+      .intro p { font-size: 12px; }
+      video { width: 58px; height: 58px; right: 15px; bottom: 74px; }
+      #status { font-size: 12px; }
+      .progress-wrap { gap: 8px; }
+      .progress-dot { width: 6px; height: 6px; }
+    }
+    @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .01ms !important; } }
+  </style>
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/"
+    }
+  }
+  </script>
+</head>
+<body>
+<main id="app">
+  <header class="topbar">
+    <div class="brand"><p class="eyebrow">五色 · 五音 · 五行归位</p><h1>五行手势粒子归位</h1></div>
+    <div class="progress-wrap" aria-label="归位进度">
+      <span id="progress-dots"></span><span id="progress-text" aria-live="polite">0 / 5</span>
+    </div>
+  </header>
+  <div class="tools">
+    <button class="icon-button" id="reset" type="button" title="重新开始" aria-label="重新开始">
+      <svg viewBox="0 0 24 24"><path d="M4 12a8 8 0 1 0 2.3-5.7L4 8.5M4 4v4.5h4.5"/></svg>
+    </button>
+    <button class="icon-button" id="music" type="button" title="选择本地音乐" aria-label="选择本地音乐">
+      <svg viewBox="0 0 24 24"><path d="M9 18V6l10-2v12M9 10l10-2M9 18a3 3 0 1 1-3-3h3v3Zm10-2a3 3 0 1 1-3-3h3v3Z"/></svg>
+    </button>
+    <button class="icon-button" id="music-play" type="button" title="播放音乐" aria-label="播放音乐" disabled>
+      <svg viewBox="0 0 24 24"><path d="M8 5v14l11-7L8 5Z"/></svg>
+    </button>
+    <button class="icon-button" id="sound" type="button" title="静音" aria-label="静音" aria-pressed="false" disabled>
+      <svg viewBox="0 0 24 24"><path d="M5 9v6h4l5 4V5L9 9H5Zm12 1a3 3 0 0 1 0 4m2-7a7 7 0 0 1 0 10"/></svg>
+    </button>
+    <button class="icon-button" id="pause" type="button" title="暂停体验" aria-label="暂停体验">
+      <svg viewBox="0 0 24 24"><path d="M8 5v14M16 5v14"/></svg>
+    </button>
+    <input id="music-file" type="file" accept="audio/*">
+  </div>
+  <div id="stage">
+    <canvas id="canvas" aria-label="五行GPU粒子流"></canvas>
+    <canvas id="overlay" aria-hidden="true"></canvas>
+    <video id="video" autoplay muted playsinline hidden aria-label="镜像摄像头预览"></video>
+  </div>
+  <section class="intro" id="intro">
+    <div class="intro-card">
+      <div class="intro-mark" aria-hidden="true"></div>
+      <h2>五行手势粒子归位</h2>
+      <p>以手为引，使五行各归其位</p>
+      <button id="start" type="button">开启体验</button>
+      <p class="privacy">点击后将开启摄像头与五音，画面仅在本机识别</p>
+    </div>
+  </section>
+  <footer class="footer">
+    <p id="status" role="status">点击开启体验</p>
+    <p class="gesture-hint">张手准备 · 握拳抓取 · 张手释放</p>
+    <p id="audio-note" role="status">未选择背景音乐 · 五音反馈已开启</p>
+  </footer>
+</main>
+
+<script type="module">
+import * as THREE from 'three';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+import { GPUComputationRenderer } from 'three/addons/misc/GPUComputationRenderer.js';
+
+// 单文件、无构建。粒子由 GPU Shader 计算；MediaPipe 通过 CDN 加载。
+const $ = id => document.getElementById(id);
+const canvas = $('canvas'), overlay = $('overlay'), ctx = overlay.getContext('2d');
+const stage = $('stage'), video = $('video'), app = $('app'), intro = $('intro');
+const TAU = Math.PI * 2;
+const clamp = (v, a = 0, b = 1) => Math.max(a, Math.min(b, v));
+const ease = (rate, dt) => 1 - Math.exp(-rate * dt);
+const distance = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
+const elements = [
+  { id: 'wood', name: '木', color: '#2E8B57', glow: '#64eab0', tone: '角', freq: 329.63,
+    u: .50, v: .14, fu: .50, fv: .42, angle: -1.51 },
+  { id: 'fire', name: '火', color: '#E63946', glow: '#ff776c', tone: '徵', freq: 392.00,
+    u: .80, v: .39, fu: .57, fv: .47, angle: -.73 },
+  { id: 'earth', name: '土', color: '#F4C430', glow: '#ffe27b', tone: '宫', freq: 261.63,
+    u: .69, v: .79, fu: .54, fv: .57, angle: .15 },
+  { id: 'metal', name: '金', color: '#F5F5F5', glow: '#ddf1ff', tone: '商', freq: 293.66,
+    u: .31, v: .79, fu: .46, fv: .57, angle: 2.73 },
+  { id: 'water', name: '水', color: '#0B1020', glow: '#6689ff', tone: '羽', freq: 440.00,
+    u: .20, v: .39, fu: .41, fv: .48, angle: -2.96 }
+];
+let width = 0, height = 0, unit = 0, dpr = 1, snapRadius = 30, time = 0;
+let held = null, palm = null, running = false, starting = false, session = 0;
+let stream = null, model = null, modelTask = null, disposed = false;
+let lastVideoTime = -1, lastInference = -Infinity, feedback = '', feedbackUntil = 0;
+let hand, previewTimer = null, selectingMusic = false;
+// GPGPU 纹理低/默认/高性能档：128² / 192² / 256²。
+const initialTier = matchMedia('(pointer: coarse)').matches && innerWidth < 900 ? 0 : 1;
+const quality = { tier: initialTier, fps: 60, samples: [], nextCheck: 0, inferenceCost: 0, bloom: true };
+const simulationSizes = [128, 192, 256];
+const groups = elements.map((e, i) => ({
+  ...e, x: 0, y: 0, vx: 0, vy: 0, lastX: 0, lastY: 0,
+  placed: false, placing: 0, scale: 1, capture: 0, phase: i * 1.71,
+  capturePoint: { x: .5, y: .5 }, magnetic: 0, successReady: false
+}));
+
+for (const e of elements) {
+  const dot = document.createElement('i');
+  dot.className = 'progress-dot'; dot.dataset.id = e.id;
+  dot.style.setProperty('--dot', e.glow); $('progress-dots').append(dot);
+}
+
+// 默认无背景音乐。用户选择的本地音频只在浏览器内播放，与归位五音独立混音。
+class Soundscape {
+  constructor() {
+    this.muted = false; this.enabled = false; this.envelope = 0; this.rawLevel = 0;
+    this.voices = new Set(); this.media = new Audio(); this.media.loop = true; this.media.preload = 'auto';
+    this.url = null; this.name = ''; this.wasPlayingBeforePause = false; this.lastAnalysis = -Infinity;
+  }
+  ensure() {
+    if (!this.ctx) {
+      const AudioContext = window.AudioContext || window.webkitAudioContext;
+      if (!AudioContext) throw new Error('浏览器不支持 Web Audio');
+      this.ctx = new AudioContext();
+      this.master = this.ctx.createGain(); this.master.gain.value = this.muted ? 0 : .85;
+      this.music = this.ctx.createGain(); this.music.gain.value = .18;
+      this.tones = this.ctx.createGain(); this.tones.gain.value = .6;
+      this.analyser = this.ctx.createAnalyser(); this.analyser.fftSize = 256;
+      this.samples = new Float32Array(256);
+      this.mediaSource = this.ctx.createMediaElementSource(this.media);
+      this.mediaSource.connect(this.music); this.music.connect(this.analyser).connect(this.master);
+      this.tones.connect(this.master); this.master.connect(this.ctx.destination);
+    }
+  }
+  async start() {
+    this.ensure();
+    await this.ctx.resume();
+    if (this.ctx.state !== 'running') throw new Error('音频尚未解锁');
+    this.enabled = true;
+    $('sound').disabled = false;
+    if (this.url && this.wasPlayingBeforePause) this.media.play().catch(() => {});
+    this.updateLabel();
+  }
+  track(source, gain = null) {
+    const voice = { source, gain }; this.voices.add(voice);
+    source.onended = () => {
+      source.disconnect(); gain?.disconnect(); this.voices.delete(voice);
+    };
+    return source;
+  }
+  async loadFile(file) {
+    if (!file) return;
+    if (file.type && !file.type.startsWith('audio/')) throw new Error('请选择音频文件');
+    if (this.loading) return;
+    this.loading = true; this.ensure(); await this.ctx.resume(); this.enabled = true;
+    const nextUrl = URL.createObjectURL(file), previousUrl = this.url;
+    const previousName = this.name, previousTime = this.media.currentTime || 0;
+    const previousPlaying = Boolean(previousUrl && !this.media.paused);
+    const t = this.ctx.currentTime;
+    this.music.gain.cancelScheduledValues(t);
+    this.music.gain.setValueAtTime(Math.max(this.music.gain.value, .0001), t);
+    this.music.gain.linearRampToValueAtTime(.0001, t + .12);
+    try {
+      // 同一个 Audio 元素立即换源，保留文件选择这一用户手势带来的播放权限。
+      this.media.pause(); this.media.src = nextUrl; this.media.load();
+      await this.media.play();
+      this.url = nextUrl; this.name = file.name || '本地音乐'; this.wasPlayingBeforePause = true;
+      if (previousUrl) URL.revokeObjectURL(previousUrl);
+      const fade = this.ctx.currentTime;
+      this.music.gain.cancelScheduledValues(fade); this.music.gain.setValueAtTime(.0001, fade);
+      this.music.gain.linearRampToValueAtTime(.18, fade + .55);
+      $('music-play').disabled = false;
+    } catch (error) {
+      URL.revokeObjectURL(nextUrl);
+      if (previousUrl) {
+        this.media.src = previousUrl; this.media.load();
+        try { this.media.currentTime = previousTime; } catch {}
+        if (previousPlaying) this.media.play().catch(() => {});
+      } else { this.media.removeAttribute('src'); this.media.load(); }
+      this.url = previousUrl; this.name = previousName;
+      this.music.gain.setTargetAtTime(.18, this.ctx.currentTime, .08);
+      throw error;
+    } finally { this.loading = false; this.updateLabel(); }
+  }
+  async toggleMusic() {
+    if (!this.url) return;
+    await this.ctx.resume();
+    if (this.media.paused) { await this.media.play(); this.wasPlayingBeforePause = true; }
+    else { this.media.pause(); this.wasPlayingBeforePause = false; }
+    this.updateLabel();
+  }
+  tone(freq) {
+    if (!this.enabled || this.muted || this.ctx?.state !== 'running') return;
+    const t = this.ctx.currentTime, gain = this.ctx.createGain();
+    const oscillator = this.track(this.ctx.createOscillator(), gain);
+    oscillator.type = 'sine'; oscillator.frequency.value = freq;
+    gain.gain.setValueAtTime(.0001, t);
+    gain.gain.exponentialRampToValueAtTime(.28, t + .02);
+    gain.gain.exponentialRampToValueAtTime(.0001, t + 1.6);
+    oscillator.connect(gain).connect(this.tones);
+    oscillator.start(t); oscillator.stop(t + 1.65);
+  }
+  level(dt, now) {
+    if (now - this.lastAnalysis >= 60 && this.enabled && this.url && !this.media.paused
+      && !this.muted && this.ctx?.state === 'running') {
+      this.analyser.getFloatTimeDomainData(this.samples);
+      this.rawLevel = clamp(Math.sqrt(this.samples.reduce((s, x) => s + x * x, 0) / this.samples.length) * 16);
+      this.lastAnalysis = now;
+    }
+    if (!this.enabled || !this.url || this.media.paused || this.muted) this.rawLevel = 0;
+    this.envelope += (this.rawLevel - this.envelope) * ease(3, dt);
+    return this.envelope;
+  }
+  updateLabel() {
+    const name = this.name?.length > 26 ? this.name.slice(0, 23) + '…' : this.name;
+    $('audio-note').textContent = this.muted ? '声音已关闭'
+      : name ? `${this.media.paused ? '已暂停' : '本地音乐'} · ${name}` : '未选择背景音乐 · 五音反馈已开启';
+    $('sound').setAttribute('aria-label', this.muted ? '开启声音' : '静音');
+    $('sound').title = this.muted ? '开启声音' : '静音';
+    $('sound').setAttribute('aria-pressed', String(this.muted));
+    const paused = !this.url || this.media.paused;
+    $('music-play').title = $('music-play').getAttribute('aria-label') = paused ? '播放音乐' : '暂停音乐';
+    $('music-play').innerHTML = paused
+      ? '<svg viewBox="0 0 24 24"><path d="M8 5v14l11-7L8 5Z"/></svg>'
+      : '<svg viewBox="0 0 24 24"><path d="M8 5v14M16 5v14"/></svg>';
+  }
+  async toggle() {
+    if (!this.ctx) return;
+    await this.ctx.resume();
+    this.muted = !this.muted;
+    this.master.gain.setTargetAtTime(this.muted ? 0 : .85, this.ctx.currentTime, .025);
+    this.updateLabel();
+  }
+  pauseForExperience() {
+    this.wasPlayingBeforePause = Boolean(this.url && !this.media.paused);
+    this.enabled = false; this.media.pause();
+    for (const { source } of this.voices) { try { source.stop(); } catch {} }
+    this.voices.clear(); this.envelope = 0;
+    this.updateLabel();
+  }
+  dispose() {
+    this.media.pause(); this.media.removeAttribute('src'); this.media.load();
+    if (this.url) URL.revokeObjectURL(this.url); this.url = null;
+    this.ctx?.close().catch(() => {});
+  }
+}
+const audio = new Soundscape();
+
+function home(g) { return { x: width * g.u, y: height * g.v }; }
+function freeCenter(g) {
+  // 这些中心只用于“抓取最近元素”的逻辑判断；视觉上五色共享同一股母流。
+  const drift = unit * .009, p = g.phase;
+  return {
+    x: width * g.fu + drift * (Math.sin(time * .19 + p) + .35 * Math.cos(time * .31 + p * 1.6)),
+    y: height * g.fv + drift * (Math.cos(time * .17 + p * .8) + .35 * Math.sin(time * .27 + p))
+  };
+}
+const renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: false, powerPreference: 'high-performance' });
+renderer.setClearColor(0x000000, 0); renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = .95;
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(45, 1, .1, 20); camera.position.z = 4;
+const viewHeight = 2 * camera.position.z * Math.tan(THREE.MathUtils.degToRad(camera.fov * .5));
+
+const computeNoise = `
+vec3 mod289(vec3 x){return x-floor(x*(1.0/289.0))*289.0;}
+vec4 mod289(vec4 x){return x-floor(x*(1.0/289.0))*289.0;}
+vec4 permute(vec4 x){return mod289(((x*34.0)+10.0)*x);}
+vec4 taylorInvSqrt(vec4 r){return 1.79284291400159-.85373472095314*r;}
+float snoise(vec3 v){
+ const vec2 C=vec2(1.0/6.0,1.0/3.0); const vec4 D=vec4(0.0,.5,1.0,2.0);
+ vec3 i=floor(v+dot(v,C.yyy)); vec3 x0=v-i+dot(i,C.xxx);
+ vec3 g=step(x0.yzx,x0.xyz),l=1.0-g; vec3 i1=min(g.xyz,l.zxy),i2=max(g.xyz,l.zxy);
+ vec3 x1=x0-i1+C.xxx,x2=x0-i2+C.yyy,x3=x0-D.yyy; i=mod289(i);
+ vec4 p=permute(permute(permute(i.z+vec4(0.0,i1.z,i2.z,1.0))+i.y+vec4(0.0,i1.y,i2.y,1.0))+i.x+vec4(0.0,i1.x,i2.x,1.0));
+ float n_=1.0/7.0; vec3 ns=n_*D.wyz-D.xzx; vec4 j=p-49.0*floor(p*ns.z*ns.z);
+ vec4 x_=floor(j*ns.z),y_=floor(j-7.0*x_); vec4 x=x_*ns.x+ns.yyyy,y=y_*ns.x+ns.yyyy;
+ vec4 h=1.0-abs(x)-abs(y),b0=vec4(x.xy,y.xy),b1=vec4(x.zw,y.zw);
+ vec4 s0=floor(b0)*2.0+1.0,s1=floor(b1)*2.0+1.0,sh=-step(h,vec4(0.0));
+ vec4 a0=b0.xzyw+s0.xzyw*sh.xxyy,a1=b1.xzyw+s1.xzyw*sh.zzww;
+ vec3 p0=vec3(a0.xy,h.x),p1=vec3(a0.zw,h.y),p2=vec3(a1.xy,h.z),p3=vec3(a1.zw,h.w);
+ vec4 norm=taylorInvSqrt(vec4(dot(p0,p0),dot(p1,p1),dot(p2,p2),dot(p3,p3)));
+ p0*=norm.x;p1*=norm.y;p2*=norm.z;p3*=norm.w;
+ vec4 m=max(.6-vec4(dot(x0,x0),dot(x1,x1),dot(x2,x2),dot(x3,x3)),0.0);m*=m;
+ return 42.0*dot(m*m,vec4(dot(p0,x0),dot(p1,x1),dot(p2,x2),dot(p3,x3)));
+}
+vec3 curlField(vec3 p){
+ float e=.085;
+ float dx=snoise(p+vec3(e,0.0,0.0))-snoise(p-vec3(e,0.0,0.0));
+ float dy=snoise(p+vec3(0.0,e,0.0))-snoise(p-vec3(0.0,e,0.0));
+ float dz=snoise(p+vec3(0.0,0.0,e))-snoise(p-vec3(0.0,0.0,e));
+ return normalize(vec3(dy-dz,dz-dx,dx-dy)+vec3(.0001));
+}`;
+
+const velocityComputeShader = `${computeNoise}
+uniform float uTime; uniform float uDelta; uniform float uAudio;
+uniform float uCapture[5]; uniform float uPlaced[5]; uniform float uPulse[5];
+uniform vec2 uCapturePoints[5]; uniform vec2 uHomes[5];
+void main(){
+ vec2 uv=gl_FragCoord.xy/resolution.xy;
+ vec4 posData=texture2D(texturePosition,uv),velData=texture2D(textureVelocity,uv);
+ vec3 p=posData.xyz,v=velData.xyz; int gi=int(floor(posData.w+.5)); float seed=velData.w;
+ float phase=float(gi)*.19; vec3 fieldP=p*1.55+vec3(phase,uTime*.075,phase*.41);
+ vec3 curl=curlField(fieldP); float centerY=.16*sin(p.x*1.42+uTime*.11);
+ float centerZ=.11*cos(p.x*1.18-uTime*.09);
+ vec3 confinement=vec3(.11,(centerY-p.y)*.72,(centerZ-p.z)*.62);
+ vec3 acc=(curl*vec3(.34,.29,.22)+confinement)*(1.0+uAudio*.07);
+ float capture=uCapture[gi],placed=uPlaced[gi],pulse=uPulse[gi];
+ float placeBlend=smoothstep(seed-.1,seed+.1,placed);
+ vec3 toCapture=vec3(uCapturePoints[gi],0.0)-p;
+ vec3 captureSwirl=vec3(-toCapture.y,toCapture.x,sin(seed*31.0+uTime)*.16);
+ acc=mix(acc,toCapture*2.35+captureSwirl*.72,capture);
+ vec3 toHome=vec3(uHomes[gi],0.0)-p;
+ vec3 homeSwirl=vec3(-toHome.y,toHome.x,sin(seed*21.0+uTime*1.4)*.08);
+ acc=mix(acc,toHome*2.8+homeSwirl*(.72+pulse*1.45),placeBlend);
+ v+=acc*uDelta;
+ float damping=mix(.987,.948,max(capture,placeBlend)); v*=pow(damping,uDelta*60.0);
+ float speed=length(v); if(speed>.72)v*=.72/speed;
+ gl_FragColor=vec4(v,seed);
+}`;
+
+const positionComputeShader = `
+uniform float uDelta; uniform float uCapture[5]; uniform float uPlaced[5]; uniform vec2 uBounds;
+void main(){
+ vec2 uv=gl_FragCoord.xy/resolution.xy;
+ vec4 posData=texture2D(texturePosition,uv),velData=texture2D(textureVelocity,uv);
+ vec3 p=posData.xyz+velData.xyz*uDelta; int gi=int(floor(posData.w+.5));
+ float placeBlend=smoothstep(velData.w-.1,velData.w+.1,uPlaced[gi]);
+ float constrained=max(uCapture[gi],placeBlend);
+ if(constrained<.12){
+   if(p.x>uBounds.x)p.x=-uBounds.x; else if(p.x<-uBounds.x)p.x=uBounds.x;
+   if(p.y>uBounds.y)p.y=-uBounds.y; else if(p.y<-uBounds.y)p.y=uBounds.y;
+   if(p.z>.55)p.z=-.55; else if(p.z<-.55)p.z=.55;
+ }
+ gl_FragColor=vec4(p,posData.w);
+}`;
+
+const flowVertexShader = `
+in vec2 reference; in float aKind; in float aSize;
+uniform sampler2D tPosition; uniform sampler2D tVelocity;
+uniform float uPixelRatio; uniform float uRunning; uniform float uAudio;
+uniform float uFocusGroup; uniform float uFocusActive;
+uniform float uCapture[5]; uniform float uPlaced[5]; uniform vec3 uColors[5];
+out vec3 vColor; out float vKind; out float vAlpha; out float vAngle; out float vSpark;
+void main(){
+ vec4 posData=texture(tPosition,reference),velData=texture(tVelocity,reference);
+ int gi=int(floor(posData.w+.5)); vec4 mv=modelViewMatrix*vec4(posData.xyz,1.0);
+ gl_Position=projectionMatrix*mv;
+ float speed=length(velData.xyz); float size=aSize*(1.0+uAudio*.025);
+ if(aKind>.5&&aKind<1.5)size*=1.0+min(speed*4.0,.65);
+ gl_PointSize=size*uPixelRatio*(4.0/max(.5,-mv.z));
+ vec2 viewVelocity=normalize(velData.xy+vec2(.0001)); vAngle=atan(viewVelocity.y,viewVelocity.x);
+ float selected=1.0-step(.25,abs(float(gi)-uFocusGroup));
+ float focusDim=mix(1.0,mix(.3,1.0,selected),uFocusActive);
+ float placedFade=mix(1.0,.46,uPlaced[gi]);
+ float kindAlpha = aKind < .5 ? .34 : (aKind < 1.5 ? .2 : .62);
+ vAlpha=kindAlpha*focusDim*placedFade*uRunning*(1.0+uCapture[gi]*.22)*(1.0+uAudio*.06);
+ vColor=uColors[gi]; vKind=aKind; vSpark=step(1.5,aKind);
+}`;
+
+const flowFragmentShader = `
+precision highp float;
+in vec3 vColor; in float vKind; in float vAlpha; in float vAngle; in float vSpark;
+out vec4 fragColor;
+mat2 rot(float a){float c=cos(a),s=sin(a);return mat2(c,-s,s,c);}
+void main(){
+ vec2 q=gl_PointCoord-.5; float alpha;
+ if(vKind<.5){alpha=1.0-smoothstep(.29,.5,length(q));}
+ else if(vKind<1.5){q=rot(-vAngle)*q;alpha=(1.0-smoothstep(.035,.11,abs(q.y)))*(1.0-smoothstep(.34,.5,abs(q.x)));}
+ else{float d=length(q);alpha=max(1.0-smoothstep(.08,.5,d),(1.0-smoothstep(0.0,.15,d))*.9);}
+ alpha*=vAlpha;if(alpha<.012)discard;
+ float brightness = vSpark > .5 ? 2.05 : (vKind > .5 ? .8 : .7);
+ fragColor=vec4(vColor*brightness,alpha);
+}`;
+
+class ParticleField {
+  constructor(size) { this.size = 0; this.build(size); }
+  build(size) {
+    if (size === this.size) return;
+    this.dispose(); this.size = size;
+    const count = size * size;
+    this.compute = new GPUComputationRenderer(size, size, renderer);
+    const positionTexture = this.compute.createTexture(), velocityTexture = this.compute.createTexture();
+    const positionData = positionTexture.image.data, velocityData = velocityTexture.image.data;
+    for (let i = 0; i < count; i++) {
+      const gid = i % 5, o = i * 4, x = (Math.random() * 2 - 1) * 1.42;
+      const baseY = Math.sin(x * 1.42) * .16;
+      positionData[o] = x;
+      positionData[o + 1] = baseY + (Math.random() + Math.random() - 1) * .43 + (gid - 2) * .009;
+      positionData[o + 2] = (Math.random() + Math.random() - 1) * .42;
+      positionData[o + 3] = gid;
+      velocityData[o] = .08 + Math.random() * .08;
+      velocityData[o + 1] = (Math.random() - .5) * .035;
+      velocityData[o + 2] = (Math.random() - .5) * .025;
+      velocityData[o + 3] = Math.random();
+    }
+    this.positionVariable = this.compute.addVariable('texturePosition', positionComputeShader, positionTexture);
+    this.velocityVariable = this.compute.addVariable('textureVelocity', velocityComputeShader, velocityTexture);
+    this.compute.setVariableDependencies(this.positionVariable, [this.positionVariable, this.velocityVariable]);
+    this.compute.setVariableDependencies(this.velocityVariable, [this.positionVariable, this.velocityVariable]);
+    this.computeUniforms = {
+      uTime: { value: 0 }, uDelta: { value: 1 / 60 }, uAudio: { value: 0 },
+      uCapture: { value: elements.map(() => 0) }, uPlaced: { value: elements.map(() => 0) },
+      uPulse: { value: elements.map(() => 0) }, uCapturePoints: { value: elements.map(() => new THREE.Vector2()) },
+      uHomes: { value: elements.map(() => new THREE.Vector2()) }, uBounds: { value: new THREE.Vector2(1.5, .92) }
+    };
+    Object.assign(this.positionVariable.material.uniforms, this.computeUniforms);
+    Object.assign(this.velocityVariable.material.uniforms, this.computeUniforms);
+    const error = this.compute.init(); if (error) throw new Error(error);
+
+    const refs = new Float32Array(count * 2), kinds = new Float32Array(count), sizes = new Float32Array(count);
+    for (let i = 0; i < count; i++) {
+      refs[i * 2] = (i % size + .5) / size; refs[i * 2 + 1] = (Math.floor(i / size) + .5) / size;
+      const localIndex = Math.floor(i / 5), slot = (localIndex * 37) % 100;
+      const kind = slot < 75 ? 0 : slot < 95 ? 1 : 2; kinds[i] = kind;
+      sizes[i] = kind === 0 ? .82 + Math.random() * 1.02 : kind === 1 ? 6.5 + Math.random() * 4.2 : 2 + Math.random() * 1.15;
+    }
+    this.geometry = new THREE.BufferGeometry();
+    this.geometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(count * 3), 3));
+    this.geometry.setAttribute('reference', new THREE.BufferAttribute(refs, 2));
+    this.geometry.setAttribute('aKind', new THREE.BufferAttribute(kinds, 1));
+    this.geometry.setAttribute('aSize', new THREE.BufferAttribute(sizes, 1));
+    this.renderUniforms = {
+      tPosition: { value: null }, tVelocity: { value: null }, uPixelRatio: { value: 1 },
+      uRunning: { value: .34 }, uAudio: { value: 0 },
+      uFocusGroup: { value: -1 }, uFocusActive: { value: 0 },
+      uCapture: { value: elements.map(() => 0) }, uPlaced: { value: elements.map(() => 0) },
+      uColors: { value: elements.map(e => new THREE.Color(e.id === 'water' ? '#4f70df' : e.glow)) }
+    };
+    this.material = new THREE.ShaderMaterial({
+      uniforms: this.renderUniforms, vertexShader: flowVertexShader, fragmentShader: flowFragmentShader,
+      glslVersion: THREE.GLSL3, transparent: true, depthWrite: false, depthTest: true,
+      blending: THREE.NormalBlending, toneMapped: true
+    });
+    this.points = new THREE.Points(this.geometry, this.material); this.points.frustumCulled = false; scene.add(this.points);
+  }
+  update(dt, level) {
+    const c = this.computeUniforms, r = this.renderUniforms;
+    c.uTime.value = time; c.uDelta.value = Math.min(dt, .033); c.uAudio.value = level;
+    c.uBounds.value.set(viewHeight * camera.aspect * .47, viewHeight * .46);
+    let focus = held ? groups.indexOf(held) : -1, focusAmount = held ? 1 : 0;
+    for (let i = 0; i < groups.length; i++) {
+      const g = groups[i], capturePoint = worldFromPixel(g.capturePoint.x * width, g.capturePoint.y * height);
+      const h = home(g), homePoint = worldFromPixel(h.x, h.y);
+      c.uCapture.value[i] = r.uCapture.value[i] = g.capture;
+      c.uPlaced.value[i] = r.uPlaced.value[i] = g.placed ? g.placing : 0;
+      c.uPulse.value[i] = g.placed ? Math.max(0, 1 - g.placing) : 0;
+      c.uCapturePoints.value[i].set(capturePoint.x, capturePoint.y);
+      c.uHomes.value[i].set(homePoint.x, homePoint.y);
+      if (!held && g.capture > focusAmount) { focus = i; focusAmount = g.capture; }
+    }
+    this.compute.compute();
+    r.tPosition.value = this.compute.getCurrentRenderTarget(this.positionVariable).texture;
+    r.tVelocity.value = this.compute.getCurrentRenderTarget(this.velocityVariable).texture;
+    r.uRunning.value = running ? 1 : .34; r.uAudio.value = level;
+    r.uFocusGroup.value = focus; r.uFocusActive.value = clamp(focusAmount);
+  }
+  setPixelRatio(ratio) { if (this.renderUniforms) this.renderUniforms.uPixelRatio.value = ratio; }
+  dispose() {
+    if (this.points) scene.remove(this.points);
+    this.geometry?.dispose(); this.material?.dispose(); this.compute?.dispose?.();
+    this.points = this.geometry = this.material = this.compute = null;
+  }
+}
+
+const particleField = new ParticleField(simulationSizes[quality.tier]);
+const composer = new EffectComposer(renderer);
+composer.addPass(new RenderPass(scene, camera));
+const bloomPass = new UnrealBloomPass(new THREE.Vector2(1, 1), .22, .18, .92);
+composer.addPass(bloomPass);
+
+function worldFromPixel(x, y) {
+  const viewWidth = viewHeight * camera.aspect;
+  return { x: (x / width - .5) * viewWidth, y: (.5 - y / height) * viewHeight };
+}
+function setBloom(enabled) { quality.bloom = Boolean(enabled); bloomPass.enabled = quality.bloom; }
+function setQuality(tier) {
+  tier = clamp(Math.round(tier), 0, 2);
+  const size = simulationSizes[tier], changed = quality.tier !== tier || particleField.size !== size;
+  quality.tier = tier;
+  if (changed) particleField.build(size);
+  if (width && height) {
+    const ratio = Math.min(window.devicePixelRatio || 1, tier === 0 ? 1.25 : 1.75);
+    renderer.setPixelRatio(ratio); renderer.setSize(width, height, false);
+    composer.setPixelRatio(ratio); composer.setSize(width, height);
+    particleField.setPixelRatio(ratio);
+  }
+}
+function resize() {
+  const rect = stage.getBoundingClientRect();
+  if (!rect.width || !rect.height) return;
+  const oldWidth = width, oldHeight = height, first = !width;
+  width = rect.width; height = rect.height; unit = Math.min(width, height);
+  dpr = Math.min(window.devicePixelRatio || 1, 2);
+  snapRadius = clamp(unit * .062, 23, 58);
+  overlay.width = Math.round(width * dpr); overlay.height = Math.round(height * dpr);
+  overlay.style.width = `${width}px`; overlay.style.height = `${height}px`;
+  camera.aspect = width / height; camera.updateProjectionMatrix();
+  setQuality(quality.tier);
+  for (const g of groups) {
+    if (first) {
+      Object.assign(g, freeCenter(g)); g.lastX = g.x; g.lastY = g.y;
+    } else if (g.placed) Object.assign(g, home(g));
+    else { g.x *= width / oldWidth; g.y *= height / oldHeight; }
+  }
+}
+
+// CPU 只维护五个不可见逻辑中心；粒子位置、速度、Curl Noise 和回流都在 GPU 中持续积分。
+function updateParticles(dt, level) {
+  time += dt;
+  for (const g of groups) {
+    g.lastX = g.x; g.lastY = g.y;
+    const h = home(g), grabbed = held === g;
+    let target = g.placed ? h : freeCenter(g);
+    if (grabbed && palm) {
+      const palmPoint = { x: palm.x * width, y: palm.y * height };
+      g.capturePoint.x = palm.x; g.capturePoint.y = palm.y;
+      const d = distance(g, h), outer = snapRadius * 1.55, inner = snapRadius * 1.15;
+      g.magnetic = clamp((outer - d) / Math.max(outer - inner, 1));
+      g.successReady = d <= inner;
+      const magnet = g.magnetic * .66;
+      target = { x: palmPoint.x * (1 - magnet) + h.x * magnet, y: palmPoint.y * (1 - magnet) + h.y * magnet };
+    } else {
+      g.magnetic += (0 - g.magnetic) * ease(7, dt); g.successReady = false;
+      if (!g.placed && hand.hover === g && palm) {
+        const hoverPull = hand.intent * .07;
+        target = { x: target.x * (1 - hoverPull) + palm.x * width * hoverPull,
+          y: target.y * (1 - hoverPull) + palm.y * height * hoverPull };
+      }
+    }
+    const response = ease(grabbed ? 19 : g.placed ? 9 : 1.05, dt);
+    const nextX = g.x + (target.x - g.x) * response;
+    const nextY = g.y + (target.y - g.y) * response;
+    g.vx = (nextX - g.x) / Math.max(dt, .001); g.vy = (nextY - g.y) / Math.max(dt, .001);
+    g.x = nextX; g.y = nextY;
+    // 抓取快速抽离，释放后缓慢回融；失败释放不会机械回弹。
+    g.capture += ((grabbed ? 1 : 0) - g.capture) * ease(grabbed ? 7.5 : 2.1, dt);
+    g.scale += ((grabbed ? .9 : g.placed ? .72 : 1) - g.scale) * ease(5, dt);
+    g.placing = g.placed ? Math.min(1, g.placing + dt * .9) : Math.max(0, g.placing - dt * 2.4);
+  }
+  particleField.update(dt, level);
+}
+function drawMark(g) {
+  const h = home(g), selected = held === g;
+  const active = g.placed ? .88 : selected ? .3 + g.magnetic * .65 : .17;
+  const pulse = .82 + Math.sin(time * 1.15 + g.phase) * .18;
+  ctx.save(); ctx.translate(h.x, h.y); ctx.globalCompositeOperation = 'screen';
+  ctx.strokeStyle = g.glow; ctx.lineCap = 'round';
+  ctx.globalAlpha = active * pulse; ctx.lineWidth = g.successReady ? 1.8 : .75;
+  ctx.beginPath(); ctx.arc(0, 0, snapRadius, time * .18 + g.phase, time * .18 + g.phase + 4.55); ctx.stroke();
+  ctx.globalAlpha = active * .48; ctx.lineWidth = .55;
+  ctx.beginPath(); ctx.arc(0, 0, snapRadius * .72, -time * .13 - g.phase, -time * .13 - g.phase + 3.7); ctx.stroke();
+  if (g.placing > 0 && g.placing < 1) {
+    ctx.globalAlpha = (1 - g.placing) * .7; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.arc(0, 0, snapRadius * (1 + g.placing * 1.2), 0, TAU); ctx.stroke();
+  }
+  ctx.restore();
+  ctx.globalCompositeOperation = 'source-over'; ctx.textAlign = 'center';
+  ctx.font = '11px "Microsoft YaHei", system-ui, sans-serif';
+  ctx.globalAlpha = selected || g.placed ? .82 : .42; ctx.fillStyle = '#a8bad0';
+  ctx.fillText(`${g.name} · ${g.tone}`, h.x, h.y + snapRadius + 18);
+}
+function draw() {
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, width, height);
+  for (const g of groups) drawMark(g);
+  if (hand.detected && palm) {
+    const x = palm.x * width, y = palm.y * height;
+    const intent = hand.gripAmount;
+    ctx.globalCompositeOperation = 'screen'; ctx.strokeStyle = held ? held.glow : '#79c8ff';
+    ctx.lineWidth = 1.15; ctx.globalAlpha = .3 + intent * .62;
+    ctx.beginPath(); ctx.arc(x, y, 16 - intent * 7, 0, TAU); ctx.stroke();
+    ctx.globalAlpha = .16 + hand.intent * .42;
+    ctx.beginPath(); ctx.arc(x, y, 23 - intent * 5, 0, TAU); ctx.stroke();
+    ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1;
+  }
+  if (quality.bloom) composer.render(); else renderer.render(scene, camera);
+}
+
+// 使用三维关节角度、掌宽归一化指间距；中间手势不当作松手。
+const sub = (a, b) => ({ x: a.x - b.x, y: a.y - b.y, z: a.z - b.z });
+const dot = (a, b) => a.x * b.x + a.y * b.y + a.z * b.z;
+const length = p => Math.hypot(p.x, p.y, p.z);
+const dist3 = (a, b) => length(sub(a, b));
+const valid = p => p?.length === 21 && p.every(v => v && [v.x, v.y, v.z].every(Number.isFinite));
+function palmCenter(points) {
+  return [0, 5, 9, 13, 17].reduce((a, i) => ({
+    x: a.x + points[i].x / 5, y: a.y + points[i].y / 5, z: a.z + points[i].z / 5
+  }), { x: 0, y: 0, z: 0 });
+}
+function angle(a, b, c) {
+  const x = sub(a, b), y = sub(c, b), denominator = length(x) * length(y);
+  return denominator < 1e-10 ? 0 : Math.acos(clamp(dot(x, y) / denominator, -1, 1)) * 180 / Math.PI;
+}
+function gripAmount(points) {
+  const side = sub(points[17], points[5]), w = length(side), center = palmCenter(points);
+  if (w < 1e-6) return 0;
+  let curlSum = 0, straight = 0;
+  for (const i of [5, 9, 13, 17]) {
+    const bend = Math.min(angle(points[i], points[i + 1], points[i + 2]),
+      angle(points[i + 1], points[i + 2], points[i + 3]));
+    const reach = dist3(points[i + 3], center) / w;
+    curlSum += clamp((165 - bend) / 82) * .68 + clamp((1.28 - reach) / .63) * .32;
+    if (bend > 150 && reach > .82) straight++;
+  }
+  const gaps = [8, 12, 16].map(i => Math.abs(dot(sub(points[i + 4], points[i]), side)) / (w * w));
+  const spread = gaps.reduce((a, b) => a + b, 0) / gaps.length;
+  const segment = sub(points[6], points[5]);
+  const t = clamp(dot(sub(points[4], points[5]), segment) / Math.max(dot(segment, segment), 1e-10));
+  const thumbGap = dist3(points[4], {
+    x: points[5].x + t * segment.x, y: points[5].y + t * segment.y, z: points[5].z + t * segment.z
+  }) / w;
+  const fist = clamp((curlSum / 4) * .9 + clamp((.82 - thumbGap) / .56) * .1);
+  // 伸直但明显并拢的五指仍作为辅助抓取，不影响自然张手释放。
+  const together = clamp((.44 - spread) / .18) * (straight / 4) * clamp((.72 - thumbGap) / .32);
+  return clamp(Math.max(fist, together));
+}
+function resetHand() {
+  held = null; palm = null;
+  hand = { down: false, armed: false, detected: false, candidate: null, since: 0,
+    lastSeen: -Infinity, gripAmount: 0, intent: 0, hover: null, raw: null, velocity: { x: 0, y: 0 } };
+}
+function updateProgress() {
+  const count = groups.filter(g => g.placed).length;
+  $('progress-text').textContent = `${count} / 5`;
+  for (const dot of $('progress-dots').children) {
+    dot.classList.toggle('done', groups.find(g => g.id === dot.dataset.id).placed);
+  }
+}
+function release(now) {
+  if (!held) return;
+  const g = held; held = null;
+  hand.hover = null; hand.intent = 0;
+  if (distance(g, home(g)) <= snapRadius * 1.15) {
+    g.placed = true; g.placing = .01; audio.tone(g.freq);
+    feedback = `${g.name} · ${g.tone} 已归位。`;
+    updateProgress();
+  } else feedback = `${g.name}尚未抵达印记，已回到自由流动。`;
+  feedbackUntil = now + 1500;
+}
+function nearestGroup(point) {
+  let best = null, bestDistance = unit * .23;
+  for (const g of groups) {
+    if (g.placed) continue;
+    const d = distance(g, point);
+    if (d < bestDistance) { best = g; bestDistance = d; }
+  }
+  return best;
+}
+function showCameraTemporarily() {
+  clearTimeout(previewTimer); video.classList.add('visible');
+  previewTimer = setTimeout(() => { if (hand.detected) video.classList.remove('visible'); }, 2600);
+}
+function acceptHand(result, now) {
+  const points = result.landmarks?.[0];
+  if (!valid(points)) { hand.detected = false; hand.candidate = null; return; }
+  const p = palmCenter(points), raw = { x: clamp(1 - p.x), y: clamp(p.y) };
+  const elapsed = Math.max(16, now - hand.lastSeen);
+  const smoothing = 1 - Math.exp(-elapsed / 48);
+  const previous = palm;
+  const smooth = previous
+    ? { x: previous.x + (raw.x - previous.x) * smoothing, y: previous.y + (raw.y - previous.y) * smoothing }
+    : raw;
+  if (previous) {
+    const measured = { x: (smooth.x - previous.x) / elapsed, y: (smooth.y - previous.y) / elapsed };
+    hand.velocity.x += (measured.x - hand.velocity.x) * .45;
+    hand.velocity.y += (measured.y - hand.velocity.y) * .45;
+  }
+  const predictionMs = 36, maxPrediction = .042;
+  const px = clamp(hand.velocity.x * predictionMs, -maxPrediction, maxPrediction);
+  const py = clamp(hand.velocity.y * predictionMs, -maxPrediction, maxPrediction);
+  palm = { x: clamp(smooth.x + px), y: clamp(smooth.y + py) };
+  if (!hand.detected) showCameraTemporarily();
+  hand.detected = true; hand.lastSeen = now;
+  const world = result.worldLandmarks?.[0], aspect = video.videoWidth / video.videoHeight;
+  const metric = valid(world) ? world : points.map(p => ({ x: p.x * aspect, y: p.y, z: p.z * aspect }));
+  const amount = gripAmount(metric);
+  hand.gripAmount += (amount - hand.gripAmount) * .58;
+  const point = { x: palm.x * width, y: palm.y * height };
+  hand.intent = clamp((hand.gripAmount - .43) / .25);
+  hand.hover = !hand.down && hand.intent > .08 ? nearestGroup(point) : null;
+
+  // 0.68抓取、0.32释放，中间迟滞区保持状态；抓取快，释放更稳。
+  const candidate = hand.gripAmount >= .68 ? 'grab' : hand.gripAmount <= .32 ? 'release' : null;
+  if (!candidate) { hand.candidate = null; return; }
+  if (candidate !== hand.candidate) { hand.candidate = candidate; hand.since = now; }
+  const required = candidate === 'grab' ? 90 : 150;
+  if (now - hand.since < required) return;
+  if (candidate === 'release') {
+    hand.armed = true;
+    if (hand.down) release(now);
+    hand.down = false;
+  } else if (hand.armed && !hand.down) {
+    hand.down = true;
+    held = hand.hover || nearestGroup(point);
+    if (!held) hand.down = false;
+    hand.hover = null; hand.intent = 0;
+  }
+}
+async function loadModel() {
+  if (model) return;
+  if (!modelTask) modelTask = (async () => {
+    const base = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.21';
+    const { FilesetResolver, HandLandmarker } = await import(`${base}/vision_bundle.mjs`);
+    const files = await FilesetResolver.forVisionTasks(`${base}/wasm`);
+    const loaded = await HandLandmarker.createFromOptions(files, {
+      baseOptions: {
+        modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task',
+        delegate: 'CPU'
+      },
+      runningMode: 'VIDEO', numHands: 1,
+      minHandDetectionConfidence: .55, minHandPresenceConfidence: .55, minTrackingConfidence: .55
+    });
+    if (disposed) loaded.close(); else model = loaded;
+  })().finally(() => { modelTask = null; });
+  await modelTask;
+}
+
+function setStatus(message) {
+  if ($('status').textContent !== message) $('status').textContent = message;
+}
+async function startCamera() {
+  if (starting || running || disposed) return;
+  if (!window.isSecureContext || !navigator.mediaDevices?.getUserMedia) {
+    setStatus('请通过 HTTPS 或 localhost 打开页面，以使用摄像头。'); return;
+  }
+  const current = ++session;
+  starting = true; $('start').disabled = true; $('start').textContent = '正在连接…'; $('sound').disabled = false;
+  setStatus('正在准备手势识别，首次加载需要片刻…');
+  let phase = 'model';
+  try {
+    // 每次重启先释放可能残留的旧轨道，再创建新的 MediaStream。
+    stream?.getTracks().forEach(track => track.stop()); stream = null;
+    video.pause(); video.srcObject = null; video.hidden = true;
+    await loadModel();
+    if (current !== session || disposed) return;
+    phase = 'camera'; setStatus('请允许使用摄像头，再张开手掌。');
+    const camera = await navigator.mediaDevices.getUserMedia({
+      audio: false, video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } }
+    });
+    if (current !== session) { camera.getTracks().forEach(t => t.stop()); return; }
+    stream = camera; video.srcObject = camera; video.hidden = false; video.classList.add('visible');
+    await video.play();
+    if (current !== session) return;
+    resetHand(); lastVideoTime = -1; lastInference = -Infinity;
+    running = true; $('start').textContent = '开启体验';
+    intro.classList.add('hidden'); app.classList.add('running');
+    showCameraTemporarily();
+  } catch (error) {
+    if (current !== session) return;
+    const messages = {
+      NotAllowedError: '摄像头权限未开启，请允许后重试。',
+      NotFoundError: '未找到摄像头，请连接后重试。',
+      NotReadableError: '摄像头被占用或不可用，请检查后重试。'
+    };
+    stopCamera(messages[error.name] || (phase === 'model'
+      ? '手势模型加载失败，请检查网络后重新开启。' : '摄像头启动失败，请检查设备后重试。'));
+  } finally {
+    // 所有启动出口都恢复按钮；模型与音频不会因摄像头失败而销毁。
+    if (current === session) {
+      starting = false; $('start').disabled = false;
+      if (!running) $('start').textContent = '开启体验';
+    }
+  }
+}
+async function startExperience() {
+  // 点击链中先解锁音频，再独立启动摄像头；未选择音乐时只启用五音反馈。
+  audio.start().catch(() => { $('audio-note').textContent = '声音暂不可用，手势体验仍可继续。'; });
+  await startCamera();
+}
+function stopCamera(message = '体验已暂停，点击开启体验继续。') {
+  session++; running = false; starting = false; resetHand();
+  stream?.getTracks().forEach(track => track.stop()); stream = null;
+  clearTimeout(previewTimer); video.classList.remove('visible');
+  video.pause(); video.srcObject = null; video.hidden = true;
+  $('start').disabled = false; $('start').textContent = '开启体验';
+  app.classList.remove('running', 'ready'); intro.classList.remove('hidden');
+  setStatus(message);
+}
+function pauseExperience(message) {
+  audio.pauseForExperience();
+  stopCamera(message);
+}
+function statusForFrame(now) {
+  if (groups.every(g => g.placed)) return '五行已归位 · 五音和鸣';
+  if (!hand.detected) return held ? '手势暂时离开画面' : '请将一只手放入画面';
+  if (!hand.armed) return '请张开手掌';
+  if (held) return held.successReady ? '张开手掌，完成归位' : `移向${held.name}之印记`;
+  if (hand.hover) return `握拳抓取${hand.hover.name}之气`;
+  return now < feedbackUntil ? feedback : '握拳抓取';
+}
+let lastFrame = performance.now();
+function frame(now) {
+  if (disposed) return;
+  const rawDt = Math.max(1, now - lastFrame), dt = clamp(rawDt / 1000, 0, .05); lastFrame = now;
+  quality.samples.push(rawDt);
+  if (quality.samples.length > 90) quality.samples.shift();
+  if (now > quality.nextCheck && quality.samples.length > 45) {
+    quality.fps = 1000 / (quality.samples.reduce((a, b) => a + b, 0) / quality.samples.length);
+    if (quality.fps < 38) { setBloom(false); setQuality(0); }
+    else if (quality.fps < 45) {
+      if (quality.bloom) setBloom(false);
+      else if (quality.tier > 0) setQuality(quality.tier - 1);
+    } else if (running && quality.fps > 57 && quality.inferenceCost < 14 && width > 620) {
+      if (quality.tier < 2) setQuality(quality.tier + 1);
+      else setBloom(true);
+    }
+    quality.nextCheck = now + 2500; quality.samples.length = 0;
+  }
+  if (running) {
+    // 短暂丢失冻结粒子；超过480ms取消抓取，不触发归位或五音。
+    if (now - hand.lastSeen > 480 && hand.lastSeen !== -Infinity) {
+      held = null; palm = null; hand.down = false; hand.armed = false; hand.hover = null;
+      hand.gripAmount = 0; hand.intent = 0; hand.lastSeen = -Infinity;
+      video.classList.add('visible');
+    }
+    if (now - lastInference >= 34 && video.readyState >= 2
+      && video.videoWidth && video.currentTime !== lastVideoTime) {
+      lastInference = now; lastVideoTime = video.currentTime;
+      const inferenceStarted = performance.now();
+      try {
+        acceptHand(model.detectForVideo(video, now), now);
+        const cost = performance.now() - inferenceStarted;
+        quality.inferenceCost += (cost - quality.inferenceCost) * .22;
+        // 推理一旦占用过长，立即让出粒子算力，不等帧率采样周期结束。
+        if (quality.inferenceCost > 22 && quality.tier > 0) {
+          setBloom(false); setQuality(quality.tier - 1);
+          quality.nextCheck = now + 3500; quality.samples.length = 0;
+        }
+      }
+      catch { stopCamera('手势识别中断，请重新开启体验。'); }
+    }
+    if (running) {
+      app.classList.toggle('ready', hand.armed);
+      setStatus(statusForFrame(now));
+    }
+  }
+  const level = audio.level(dt, now); updateParticles(dt, level); draw();
+  requestAnimationFrame(frame);
+}
+$('start').addEventListener('click', () => { if (!starting && !running) void startExperience(); });
+$('pause').addEventListener('click', () => pauseExperience());
+$('reset').addEventListener('click', () => {
+  resetHand(); time = 0; feedbackUntil = 0;
+  for (const g of groups) {
+    g.placed = false; g.placing = 0; g.scale = 1; g.capture = 0; g.magnetic = 0;
+    g.capturePoint.x = g.fu; g.capturePoint.y = g.fv;
+    Object.assign(g, freeCenter(g));
+  }
+  updateProgress();
+  setStatus(running ? '新一轮开始 · 请张开手掌' : '点击开启体验');
+});
+$('sound').addEventListener('click', () => audio.toggle().catch(() => {
+  $('audio-note').textContent = '声音暂不可用，请暂停后重新开启体验。';
+}));
+$('music').addEventListener('click', () => {
+  selectingMusic = true;
+  $('music-file').click();
+});
+$('music-file').addEventListener('change', async event => {
+  const file = event.target.files?.[0]; event.target.value = '';
+  try {
+    if (file) await audio.loadFile(file);
+  } catch { $('audio-note').textContent = '音乐无法播放，当前声音状态未改变。'; }
+  finally { selectingMusic = false; }
+});
+$('music-play').addEventListener('click', () => audio.toggleMusic().catch(() => {
+  $('audio-note').textContent = '音乐无法播放，请重新选择文件。';
+}));
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden && !selectingMusic && (running || starting)) pauseExperience();
+});
+window.addEventListener('focus', () => {
+  // 某些浏览器在取消文件选择时不会触发 change，以窗口重新聚焦作为兜底。
+  if (selectingMusic) setTimeout(() => { selectingMusic = false; }, 180);
+});
+window.addEventListener('pagehide', event => {
+  pauseExperience();
+  if (!event.persisted) {
+    disposed = true; model?.close(); audio.dispose(); particleField.dispose(); composer.dispose?.(); renderer.dispose();
+  }
+});
+const observer = new ResizeObserver(resize); observer.observe(stage);
+window.addEventListener('resize', resize);
+resetHand(); resize(); requestAnimationFrame(frame);
+updateProgress();
+</script>
+</body>
+</html>
